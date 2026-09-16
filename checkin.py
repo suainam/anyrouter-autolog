@@ -256,6 +256,67 @@ def get_user_info(client, headers, user_info_url: str):
 		return {'success': False, 'error': f'Failed to get user info: {str(e)[:50]}...'}
 
 
+async def login_with_session_cookie(
+	account_name: str,
+	provider_config,
+	provider_name: str,
+	session_value: str,
+) -> tuple[dict[str, str], dict | None] | None:
+	"""使用 Session Cookie 注入浏览器上下文访问 /console 完成过盾并获取用户信息"""
+	print(f'[PROCESSING] {account_name}: Logging in with session cookie via browser...')
+
+	settings = load_browser_login_settings(
+		account_name,
+		provider_name,
+		persist_profile=provider_config.persist_profile,
+	)
+	timeout_ms = settings.wait_timeout_ms
+
+	try:
+		context = await launch_login_context(settings, use_proxy=provider_config.use_proxy)
+	except Exception as e:
+		print(f'[FAILED] {account_name}: Browser launch failed: {e}')
+		return None
+
+	page = None
+	try:
+		from urllib.parse import urlparse
+		parsed = urlparse(provider_config.domain)
+		domain_clean = parsed.hostname or parsed.netloc
+
+		await context.add_cookies([
+			{
+				'name': 'session',
+				'value': session_value,
+				'domain': domain_clean,
+				'path': '/',
+			}
+		])
+
+		page = await context.new_page()
+		await prepare_browser_page(page)
+
+		console_url = f'{provider_config.domain}/console'
+		user_profile = await verify_browser_login(page, console_url, timeout_ms)
+
+		cookies = await context.cookies()
+		all_cookies = {
+			cookie.get('name'): cookie.get('value')
+			for cookie in cookies
+			if cookie.get('name') and cookie.get('value')
+		}
+
+		await context.close()
+		return all_cookies, user_profile
+
+	except Exception as e:
+		print(f'[FAILED] {account_name}: Error during session browser visit: {e}')
+		if page is not None:
+			await save_login_screenshot(page, provider_name, account_name, 'session-browser-error')
+		await context.close()
+		return None
+
+
 async def prepare_cookies(account_name: str, provider_config, user_cookies: dict) -> dict | None:
 	"""准备请求所需的 cookies（可能包含 WAF cookies）"""
 	waf_cookies = {}
@@ -388,6 +449,37 @@ async def check_in_account(account: AccountConfig, account_index: int, app_confi
 		if not user_cookies:
 			print(f'[FAILED] {account_name}: Invalid configuration format')
 			return False, None, None
+
+		session_val = user_cookies.get('session')
+		if session_val and not provider_config.needs_manual_check_in():
+			# 自动签到型 provider（如 AgentRouter）：Session 直接注入浏览器访问 /console 完成签到与鉴权
+			res = await login_with_session_cookie(
+				account_name,
+				provider_config,
+				account.provider,
+				session_val,
+			)
+			if not res:
+				print(f'[FAILED] {account_name}: Browser session verification failed')
+				return False, None, None
+
+			all_cookies, user_profile = res
+			if user_profile and user_profile.get('id'):
+				quota = round(user_profile.get('quota', 0) / 500000, 2)
+				used_quota = round(user_profile.get('used_quota', 0) / 500000, 2)
+				info = {
+					'success': True,
+					'quota': quota,
+					'used_quota': used_quota,
+					'display': f':money: Current balance: ${quota}, Used: ${used_quota}',
+				}
+				print(info['display'])
+				print(f'[INFO] {account_name}: Check-in completed automatically (triggered by browser console load)')
+				return True, info, info
+
+			print(f'[FAILED] {account_name}: Session cookie invalid or expired')
+			return False, None, None
+
 		all_cookies = await prepare_cookies(account_name, provider_config, user_cookies)
 		auth_method = 'session cookies'
 
