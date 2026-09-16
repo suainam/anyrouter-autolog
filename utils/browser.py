@@ -427,7 +427,36 @@ async def wait_for_logged_in(page: Page, timeout_ms: int = SESSION_WAIT_TIMEOUT_
 	return False
 
 
-async def verify_browser_login(page: Page, console_url: str, timeout_ms: int) -> dict | None:
+async def fetch_user_profile(page: Page, api_user: str | None = None) -> dict | None:
+	"""在浏览器上下文内查询用户信息，避免 WAF 拦截 httpx。"""
+	try:
+		payload = await page.evaluate(
+			"""async ({ path, apiUser }) => {
+				for (const value of [null, apiUser]) {
+					if (value !== null && !value) continue;
+					try {
+						const headers = { Accept: 'application/json' };
+						if (value) headers['New-Api-User'] = value;
+						const response = await fetch(path, { cache: 'no-store', credentials: 'include', headers });
+						if (response.ok) return await response.json();
+					} catch (_) {}
+				}
+				return null;
+			}""",
+			{'path': USER_SELF_API_SUFFIX, 'apiUser': api_user},
+		)
+	except Exception:  # nosec B110
+		return None
+	return _extract_user_profile(payload)
+
+
+async def verify_browser_login(
+	page: Page,
+	console_url: str,
+	timeout_ms: int,
+	*,
+	api_user: str | None = None,
+) -> dict | None:
 	"""跳转 /console 并拦截 /api/user/self，用浏览器会话确认登录用户。"""
 	verify_timeout = min(timeout_ms, SESSION_WAIT_TIMEOUT_MS)
 	captured_profile: dict | None = None
@@ -453,9 +482,16 @@ async def verify_browser_login(page: Page, console_url: str, timeout_ms: int) ->
 
 		if captured_profile is None:
 			try:
-				await asyncio.wait_for(verified.wait(), timeout=verify_timeout / 1000)
+				await asyncio.wait_for(verified.wait(), timeout=min(verify_timeout, 10_000) / 1000)
 			except TimeoutError:
 				pass
+
+		if captured_profile is None:
+			for _ in range(6):
+				captured_profile = await fetch_user_profile(page, api_user)
+				if captured_profile:
+					break
+				await asyncio.sleep(0.5)
 	finally:
 		page.remove_listener('response', on_response)
 

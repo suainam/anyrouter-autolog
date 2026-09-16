@@ -233,6 +233,38 @@ async def login_with_credentials(
 		await context.close()
 		return None
 
+async def check_in_with_browser_session(account_name: str, account: AccountConfig, provider_config):
+	"""AgentRouter Session 模式：全程在浏览器上下文中执行，避免 WAF 拦截。"""
+	session = parse_cookies(account.cookies).get('session')
+	if not session:
+		return None
+	settings = load_browser_login_settings(account_name, account.provider, persist_profile=False)
+	try:
+		context = await launch_login_context(settings, use_proxy=provider_config.use_proxy)
+		from urllib.parse import urlparse
+		domain = urlparse(provider_config.domain).hostname
+		await context.add_cookies([{'name': 'session', 'value': session, 'domain': domain, 'path': '/'}])
+		page = await context.new_page()
+		await prepare_browser_page(page)
+		profile = await verify_browser_login(
+			page,
+			f'{provider_config.domain}/console',
+			settings.wait_timeout_ms,
+			api_user=account.api_user,
+		)
+		await context.close()
+		if not profile:
+			return None
+		quota = round(profile.get('quota', 0) / 500000, 2)
+		used = round(profile.get('used_quota', 0) / 500000, 2)
+		info = {'success': True, 'quota': quota, 'used_quota': used, 'display': f':money: Current balance: ${quota}, Used: ${used}'}
+		print(info['display'])
+		print(f'[INFO] {account_name}: Check-in completed automatically (browser session)')
+		return True, info, info
+	except Exception as e:
+		print(f'[FAILED] {account_name}: Browser session request failed: {str(e)[:80]}')
+		return None
+
 
 def get_user_info(client, headers, user_info_url: str):
 	"""获取用户信息"""
@@ -387,6 +419,12 @@ async def check_in_account(account: AccountConfig, account_index: int, app_confi
 		user_cookies = parse_cookies(account.cookies)
 		if not user_cookies:
 			print(f'[FAILED] {account_name}: Invalid configuration format')
+			return False, None, None
+		if account.provider == 'agentrouter' and user_cookies.get('session'):
+			browser_result = await check_in_with_browser_session(account_name, account, provider_config)
+			if browser_result:
+				return browser_result
+			print(f'[FAILED] {account_name}: Browser session verification failed')
 			return False, None, None
 		all_cookies = await prepare_cookies(account_name, provider_config, user_cookies)
 		auth_method = 'session cookies'
