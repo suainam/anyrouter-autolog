@@ -155,21 +155,38 @@ class AccountConfig:
 	name: str | None = None
 	email: str | None = None
 	password: str | None = None
-
+	github_session: str | None = None
+	linuxdo_session: str | None = None
 	@classmethod
 	def from_dict(cls, data: dict, index: int) -> 'AccountConfig':
 		"""从字典创建 AccountConfig"""
 		provider = data.get('provider', 'anyrouter')
 		name = data.get('name', f'Account {index + 1}')
 
+		cookies_val = data.get('cookies')
+		github_session = data.get('github_session')
+		linuxdo_session = data.get('linuxdo_session')
+
+		# 兼容直接把 user_session / _forum_session 写在 cookies 字典里的场景
+		if not github_session and isinstance(cookies_val, dict):
+			github_session = cookies_val.get('user_session') or cookies_val.get('github_session')
+		if not linuxdo_session and isinstance(cookies_val, dict):
+			linuxdo_session = cookies_val.get('_forum_session') or cookies_val.get('linuxdo_session')
+
 		return cls(
-			cookies=data.get('cookies'),
+			cookies=cookies_val,
 			api_user=data.get('api_user'),
 			provider=provider,
 			name=name if name else None,
 			email=data.get('email'),
 			password=data.get('password'),
+			github_session=github_session,
+			linuxdo_session=linuxdo_session,
 		)
+
+	def has_oauth_session(self) -> bool:
+		"""是否配置了第三方 OAuth 会话"""
+		return bool(self.github_session or self.linuxdo_session)
 
 	def has_login_credentials(self) -> bool:
 		"""是否配置了邮箱密码登录"""
