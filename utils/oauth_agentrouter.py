@@ -135,7 +135,8 @@ class AgentRouterOAuthClient:
 					if code:
 						return code
 
-			raise RuntimeError('未能从 GitHub 获取授权码，请确认 GitHub 会话是否有效')
+			sample_text = re.sub(r'\s+', ' ', resp.text[:300])
+			raise RuntimeError(f'未能从 GitHub 获取授权码 (HTTP {resp.status_code}, url: {resp.url}): {sample_text}')
 
 	def authorize_linuxdo(
 		self,
@@ -164,7 +165,8 @@ class AgentRouterOAuthClient:
 			code = extract_code_from_location(location)
 			if code:
 				return code
-			raise RuntimeError('未能从 LinuxDo 获取授权码，请确认会话是否有效')
+			sample_text = re.sub(r'\s+', ' ', resp.text[:300])
+			raise RuntimeError(f'未能从 LinuxDo 获取授权码 (HTTP {resp.status_code}, url: {resp.url}, loc: {location}): {sample_text}')
 
 	def callback_login(
 		self,
