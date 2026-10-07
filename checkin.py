@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import sys
+import random
 from datetime import datetime
 
 if hasattr(sys.stdout, 'reconfigure'):
@@ -601,6 +602,10 @@ async def main():
 
 	for i, account in enumerate(accounts):
 		account_key = f'account_{i + 1}'
+		if i > 0:
+			jitter_secs = random.randint(5, 18)
+			print(f'[INFO] Account jitter: waiting {jitter_secs}s before next account...')
+			await asyncio.sleep(jitter_secs)
 		try:
 			success, user_info_before, user_info_after = await check_in_account(account, i, app_config)
 			if success:
