@@ -135,9 +135,11 @@ class AgentRouterOAuthClient:
 					if code:
 						return code
 
-			sample_text = re.sub(r'\s+', ' ', resp.text[:300])
-			raise RuntimeError(f'未能从 GitHub 获取授权码 (HTTP {resp.status_code}, url: {resp.url}): {sample_text}')
-
+			title_m = re.search(r'<title>(.*?)</title>', resp.text, re.I)
+			title = title_m.group(1) if title_m else 'No title'
+			forms = re.findall(r'<form[^>]*>', resp.text, re.I)
+			sample_text = re.sub(r'\s+', ' ', resp.text[:400])
+			raise RuntimeError(f'未能从 GitHub 获取授权码 (HTTP {resp.status_code}, title: {title}, forms: {forms}): {sample_text}')
 	def authorize_linuxdo(
 		self,
 		linuxdo_session_token: str,
