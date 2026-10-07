@@ -222,19 +222,29 @@ def load_accounts_config() -> list[AccountConfig] | None:
 				print(f'ERROR: Account {i + 1} configuration format is incorrect')
 				return None
 
+			has_login = bool(account_dict.get('email') and account_dict.get('password'))
+			has_oauth = bool(
+				account_dict.get('github_session')
+				or account_dict.get('linuxdo_session')
+				or (isinstance(account_dict.get('cookies'), dict) and (
+					account_dict['cookies'].get('user_session')
+					or account_dict['cookies'].get('github_session')
+					or account_dict['cookies'].get('_forum_session')
+					or account_dict['cookies'].get('linuxdo_session')
+				))
+			)
+
 			if 'api_user' not in account_dict:
-				has_login = account_dict.get('email') and account_dict.get('password')
-				if not has_login:
+				if not has_login and not has_oauth:
 					print(
-						f'ERROR: Account {i + 1} missing required field (api_user) - only email+password login can omit it'
+						f'ERROR: Account {i + 1} missing required field (api_user) - only email+password or OAuth login can omit it'
 					)
 					return None
 
-			has_cookies = 'cookies' in account_dict and account_dict['cookies']
-			has_login = account_dict.get('email') and account_dict.get('password')
+			has_cookies = bool('cookies' in account_dict and account_dict['cookies'])
 
-			if not has_cookies and not has_login:
-				print(f'ERROR: Account {i + 1} must have either cookies or email+password')
+			if not has_cookies and not has_login and not has_oauth:
+				print(f'ERROR: Account {i + 1} must have either cookies, email+password, or oauth session')
 				return None
 
 			if 'name' in account_dict and not account_dict['name']:

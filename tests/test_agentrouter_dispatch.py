@@ -47,3 +47,16 @@ async def test_agentrouter_static_session_warns_and_does_not_fake_success():
 
 		success, before, after = await check_in_account(acc, 0, app_config)
 		assert success is False
+
+def test_load_accounts_config_accepts_oauth_without_api_user(monkeypatch):
+	import json
+	from utils.config import load_accounts_config
+	payload = json.dumps([
+		{"name": "gh_user", "provider": "agentrouter", "github_session": "token123"}
+	])
+	monkeypatch.setenv("ANYROUTER_ACCOUNTS", payload)
+	accounts = load_accounts_config()
+	assert accounts is not None
+	assert len(accounts) == 1
+	assert accounts[0].github_session == "token123"
+	assert accounts[0].api_user is None
