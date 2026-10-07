@@ -108,11 +108,16 @@ class AgentRouterOAuthClient:
 			if code:
 				return code
 
+			# 检查页面内容中的跳转链接、meta refresh 或页面内嵌入的 code
+			if 'code=' in resp.text:
+				code_match = re.search(r'code=([a-zA-Z0-9_-]+)', resp.text)
+				if code_match:
+					return code_match.group(1)
+
 			if resp.status_code in (301, 302, 303):
 				if location.startswith(f'{GITHUB_HOST}/login'):
 					raise RuntimeError('GitHub 登录态无效或已过期，请更新 github_session')
 				raise RuntimeError(f'GitHub 未返回授权码，跳转地址: {location[:150]}')
-
 			# 首次授权表单处理
 			if resp.status_code == 200 and 'action=' in resp.text:
 				action_match = re.search(r'<form[^>]+action="([^"]+)"', resp.text)
@@ -138,7 +143,7 @@ class AgentRouterOAuthClient:
 			title_m = re.search(r'<title>(.*?)</title>', resp.text, re.I)
 			title = title_m.group(1) if title_m else 'No title'
 			forms = re.findall(r'<form[^>]*>', resp.text, re.I)
-			sample_text = re.sub(r'\s+', ' ', resp.text[:400])
+			sample_text = re.sub(r'\s+', ' ', resp.text[:1000])
 			raise RuntimeError(f'未能从 GitHub 获取授权码 (HTTP {resp.status_code}, title: {title}, forms: {forms}): {sample_text}')
 	def authorize_linuxdo(
 		self,

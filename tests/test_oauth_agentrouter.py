@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import pytest
 from utils.oauth_agentrouter import (
 	AgentRouterOAuthClient,
@@ -33,6 +33,18 @@ def test_fetch_oauth_state(monkeypatch):
 
 	state = oauth.fetch_oauth_state(mock_client)
 	assert state == "state_token_123"
+
+
+def test_authorize_github_from_meta_refresh():
+	oauth = AgentRouterOAuthClient(domain="https://agentrouter.org")
+	mock_resp = MagicMock()
+	mock_resp.status_code = 200
+	mock_resp.headers = {}
+	mock_resp.text = '<html><head><title>OAuth application authorized</title><meta http-equiv="refresh" content="0;url=https://agentrouter.org/api/oauth/github?code=secret_code_789&state=state123"></head></html>'
+
+	with patch("httpx.Client.get", return_value=mock_resp):
+		code = oauth.authorize_github("test_session", "state123")
+		assert code == "secret_code_789"
 
 
 def test_callback_login_success():
