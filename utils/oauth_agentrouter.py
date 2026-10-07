@@ -72,7 +72,10 @@ class AgentRouterOAuthClient:
 				self.domain = self.backup_domain
 
 		resp.raise_for_status()
-		body = resp.json()
+		try:
+			body = resp.json()
+		except Exception as e:
+			raise RuntimeError(f'获取 OAuth state 响应非 JSON (HTTP {resp.status_code}): {resp.text[:120]}')
 		if not body.get('success') or not body.get('data'):
 			raise RuntimeError(f'获取 OAuth state 失败: {body.get("message")}')
 		return str(body['data'])

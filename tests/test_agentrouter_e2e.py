@@ -36,7 +36,7 @@ async def test_run_agentrouter_oauth_checkin_success_with_reward():
 			{"success": True, "quota": 50.0, "used_quota": 5.0, "display": "Balance: $50.0"},
 		]
 
-		success, before, after = await run_agentrouter_oauth_checkin(acc, "test_gh_user", provider_config)
+		success, before, after = await run_agentrouter_oauth_checkin({"acw_tc": "test"}, acc, "test_gh_user", provider_config)
 		assert success is True
 		assert before["quota"] == 25.0
 		assert after["quota"] == 50.0
@@ -72,7 +72,7 @@ async def test_run_agentrouter_oauth_checkin_already_checked_in():
 			{"success": True, "quota": 50.0, "used_quota": 5.0, "display": "Balance: $50.0"},
 		]
 
-		success, before, after = await run_agentrouter_oauth_checkin(acc, "test_gh_user", provider_config)
+		success, before, after = await run_agentrouter_oauth_checkin({"acw_tc": "test"}, acc, "test_gh_user", provider_config)
 		assert success is True
 		assert before["quota"] == after["quota"]
 
@@ -97,5 +97,5 @@ async def test_run_agentrouter_oauth_checkin_auth_failed():
 		mock_auth.side_effect = RuntimeError("GitHub 登录态无效或已过期")
 		mock_user_info.return_value = {"success": True, "quota": 50.0, "used_quota": 5.0, "display": "Balance: $50.0"}
 
-		success, before, after = await run_agentrouter_oauth_checkin(acc, "test_gh_user", provider_config)
+		success, before, after = await run_agentrouter_oauth_checkin({"acw_tc": "test"}, acc, "test_gh_user", provider_config)
 		assert success is False

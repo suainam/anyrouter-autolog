@@ -387,7 +387,11 @@ async def check_in_account(account: AccountConfig, account_index: int, app_confi
 			return False, None, None
 	elif account.provider == 'agentrouter' and account.has_oauth_session():
 		print(f'[INFO] {account_name}: Attempting OAuth silent re-login for AgentRouter...')
-		return await run_agentrouter_oauth_checkin(account, account_name, provider_config)
+		user_cookies = parse_cookies(account.cookies)
+		all_cookies = await prepare_cookies(account_name, provider_config, user_cookies)
+		if not all_cookies:
+			return False, None, None
+		return await run_agentrouter_oauth_checkin(all_cookies, account, account_name, provider_config)
 	else:
 		user_cookies = parse_cookies(account.cookies)
 		if not user_cookies:
@@ -412,6 +416,7 @@ async def check_in_account(account: AccountConfig, account_index: int, app_confi
 
 
 async def run_agentrouter_oauth_checkin(
+	all_cookies: dict,
 	account: AccountConfig,
 	account_name: str,
 	provider_config,
@@ -432,9 +437,8 @@ async def run_agentrouter_oauth_checkin(
 			print(f'[WARN] {account_name}: Provider requires proxy but CHECKIN_PROXY_URL is not set')
 
 		with httpx.Client(**client_kwargs) as client:
-			user_cookies = parse_cookies(account.cookies)
-			if user_cookies:
-				client.cookies.update(user_cookies)
+			if all_cookies:
+				client.cookies.update(all_cookies)
 			headers = get_browser_headers(domain=provider_config.domain)
 			if account.api_user:
 				headers[provider_config.api_user_key] = account.api_user
